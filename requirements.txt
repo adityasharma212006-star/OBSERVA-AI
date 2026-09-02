@@ -4,3 +4,5 @@ plotly>=5.24
 Pillow>=10.0
 pytesseract>=0.3
 google-generativeai>=0.8
+opencv-python-headless
+numpy
