@@ -8,7 +8,7 @@ import streamlit as st
 from PIL import Image
 from ai_engine import analyze_image
 
-# ================= DATABASE SETUP (SQLite) =================
+# ================= DATABASE SETUP =================
 DB_FILE = "observa_cognitive.db"
 
 def init_db():
@@ -56,109 +56,81 @@ def clear_history():
 
 init_db()
 
-# ================= STREAMLIT CONFIG & MODERN UI =================
+# ================= PAGE SETUP =================
 st.set_page_config(
-    page_title="OBSERVA AI • Cognitive Vision",
+    page_title="OBSERVA AI",
     page_icon="🧠",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# Custom High-End Cyber/Neuro Aesthetic (Mobile-First)
+# ================= ROBUST STYLING (NO CLIPPING) =================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
-
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-    }
-
-    /* Mobile container constraint */
+    /* Give safe spacing from top of screen */
     .block-container {
-        max-width: 620px !important;
-        padding-top: 1.5rem !important;
-        padding-bottom: 2.5rem !important;
+        max-width: 580px !important;
+        padding-top: 3.5rem !important;
+        padding-bottom: 3rem !important;
         padding-left: 1rem !important;
         padding-right: 1rem !important;
     }
 
-    /* Glassmorphic card styling */
-    .glass-card {
-        background: rgba(15, 23, 42, 0.7);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(56, 189, 248, 0.15);
-        border-radius: 20px;
-        padding: 1.25rem;
-        margin-bottom: 1.2rem;
-        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    /* Modern Primary Buttons */
+    .stButton > button {
+        width: 100% !important;
+        background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%) !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 1.05rem !important;
+        border-radius: 12px !important;
+        border: none !important;
+        padding: 0.75rem 1.2rem !important;
+        box-shadow: 0 4px 15px rgba(14, 165, 233, 0.35) !important;
+        transition: transform 0.1s ease !important;
+    }
+    .stButton > button:active {
+        transform: scale(0.98) !important;
     }
 
-    /* Hero title accent */
-    .app-title {
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-size: 1.9rem;
-        margin-bottom: 0.2rem;
-    }
-
-    /* Primary futuristic button */
-    .stButton>button {
-        width: 100%;
-        background: linear-gradient(135deg, #0284c7 0%, #6366f1 100%);
-        color: #ffffff;
-        font-weight: 700;
-        font-size: 1.05rem;
-        border: none;
-        border-radius: 14px;
-        padding: 0.8rem 1.5rem;
-        transition: all 0.25s ease;
-        box-shadow: 0 8px 20px -6px rgba(99, 102, 241, 0.5);
-    }
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 12px 24px -6px rgba(99, 102, 241, 0.7);
-        color: #ffffff;
-    }
-
-    /* Countdown HUD timer */
-    .timer-badge {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 2.5rem;
+    /* Style the countdown HUD */
+    .hud-timer {
+        font-size: 2.8rem;
         font-weight: 800;
         text-align: center;
         color: #38bdf8;
         background: rgba(14, 165, 233, 0.1);
-        border: 1px solid rgba(56, 189, 248, 0.4);
-        border-radius: 18px;
+        border: 2px solid rgba(56, 189, 248, 0.4);
+        border-radius: 16px;
         padding: 0.6rem;
         margin-bottom: 1rem;
-        box-shadow: 0 0 25px rgba(56, 189, 248, 0.2);
     }
 
-    /* Question cards */
-    .q-box {
-        background: rgba(30, 41, 59, 0.6);
-        border-left: 3px solid #38bdf8;
-        border-radius: 12px;
-        padding: 0.9rem;
-        margin-bottom: 0.8rem;
-    }
-
-    /* Responsive image viewports */
-    img {
-        border-radius: 16px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    }
+    /* Hide Streamlit Default Chrome */
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
 </style>
+""", unsafe_allow_html=True)
+
+# ================= BULLETPROOF HEADER =================
+st.markdown("""
+<div style="text-align: center; margin-bottom: 1.5rem; padding-top: 0.5rem;">
+    <div style="display: inline-block; padding: 4px 12px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 20px; color: #38bdf8; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px;">
+        AI VISUAL COGNITION LAB
+    </div>
+    <div style="font-size: 34px; font-weight: 800; color: #ffffff; line-height: 1.4; margin: 0; padding: 0;">
+        🧠 OBSERVA <span style="color: #38bdf8;">AI</span>
+    </div>
+    <div style="color: #94a3b8; font-size: 13px; font-weight: 500; margin-top: 4px;">
+        Visual Observation & Memory Training System
+    </div>
+</div>
 """, unsafe_allow_html=True)
 
 # ================= SESSION STATE =================
 if "phase" not in st.session_state:
-    st.session_state.phase = "upload"  # upload -> observe -> question -> result
+    st.session_state.phase = "upload"
 if "analysis" not in st.session_state:
     st.session_state.analysis = None
 if "image_path" not in st.session_state:
@@ -166,73 +138,62 @@ if "image_path" not in st.session_state:
 if "saved_this_round" not in st.session_state:
     st.session_state.saved_this_round = False
 
-# ================= HEADER =================
-st.markdown('<div class="app-title">🧠 OBSERVA AI</div>', unsafe_allow_html=True)
-st.caption("Neuro-Cognitive Visual Observation & Memory Training System")
-
+# Navigation Tabs
 tab_challenge, tab_analytics = st.tabs(["🎯 Challenge Deck", "📊 Cognitive Profile"])
 
-# =================================================================
-# TAB 1: CHALLENGE DECK
-# =================================================================
+# ================= TAB 1: CHALLENGE =================
 with tab_challenge:
 
-    # 1. SETUP / UPLOAD PHASE
+    # 1. SETUP PHASE
     if st.session_state.phase == "upload":
         st.session_state.saved_this_round = False
-        
-        with st.container():
-            st.markdown("""
-            <div class="glass-card">
-                <div style="font-size: 0.88rem; color: #94a3b8; line-height: 1.5;">
-                    Upload or snap an environment scene. OBSERVA will analyze visual features, give you a timed window to inspect it, conceal the image, and evaluate your recall accuracy.
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
 
-            source = st.radio("Capture Method", ["📸 Snap Photo", "📁 Upload File"], horizontal=True, label_visibility="collapsed")
-            
-            uploaded_file = None
-            if source == "📸 Snap Photo":
-                uploaded_file = st.camera_input("Capture scene directly")
-            else:
-                uploaded_file = st.file_uploader("Select scene image", type=["jpg", "jpeg", "png"])
+        st.info("Observe an environment under a timed countdown. The image will be hidden, and your recall will be evaluated across visual detail, colors, and quadrants.")
 
-            c1, c2 = st.columns(2)
-            with c1:
-                difficulty = st.selectbox("Difficulty Target", ["Easy", "Medium", "Hard"], index=1)
-            with c2:
-                obs_time = st.slider("Observe Window (sec)", 5, 25, 10)
+        source = st.radio("Capture Method", ["📸 Camera Snap", "📁 Upload File"], horizontal=True)
 
-            use_gemini = st.checkbox("Enable Gemini Multimodal Vision", value=False)
+        uploaded_file = None
+        if source == "📸 Camera Snap":
+            uploaded_file = st.camera_input("Take scene photo")
+        else:
+            uploaded_file = st.file_uploader("Upload scene image", type=["jpg", "jpeg", "png"])
 
-            if uploaded_file is not None:
-                if st.button("🚀 Initialize Cognitive Assessment"):
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                        tmp.write(uploaded_file.getvalue())
-                        st.session_state.image_path = tmp.name
+        col1, col2 = st.columns(2)
+        with col1:
+            difficulty = st.selectbox("Difficulty Tier", ["Easy", "Medium", "Hard"], index=1)
+        with col2:
+            obs_time = st.slider("Observe Window (sec)", 5, 25, 10)
 
-                    with st.spinner("Extracting visual features & spatial quadrants..."):
-                        st.session_state.analysis = analyze_image(
-                            st.session_state.image_path,
-                            use_gemini=use_gemini,
-                            difficulty=difficulty
-                        )
-                    st.session_state.obs_time = obs_time
-                    st.session_state.difficulty = difficulty
-                    st.session_state.phase = "observe"
-                    st.rerun()
+        use_gemini = st.checkbox("Use Gemini Multimodal Vision", value=False)
 
-    # 2. OBSERVATION PHASE (COUNTDOWN)
+        if uploaded_file is not None:
+            st.write("")
+            if st.button("🚀 Start Challenge"):
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                    tmp.write(uploaded_file.getvalue())
+                    st.session_state.image_path = tmp.name
+
+                with st.spinner("Extracting scene details..."):
+                    st.session_state.analysis = analyze_image(
+                        st.session_state.image_path,
+                        use_gemini=use_gemini,
+                        difficulty=difficulty
+                    )
+                st.session_state.obs_time = obs_time
+                st.session_state.difficulty = difficulty
+                st.session_state.phase = "observe"
+                st.rerun()
+
+    # 2. OBSERVATION COUNTDOWN
     elif st.session_state.phase == "observe":
-        st.markdown(f"#### 👁️ Commit scene details to memory ({st.session_state.difficulty})")
+        st.markdown(f"#### 👁️ Memorize the Scene ({st.session_state.difficulty} Mode)")
         timer_box = st.empty()
         img_box = st.empty()
 
         img_box.image(st.session_state.image_path, use_container_width=True)
 
         for remaining in range(st.session_state.obs_time, 0, -1):
-            timer_box.markdown(f'<div class="timer-badge">⏱️ {remaining:02d}s</div>', unsafe_allow_html=True)
+            timer_box.markdown(f'<div class="hud-timer">⏱️ {remaining:02d}s</div>', unsafe_allow_html=True)
             time.sleep(1)
 
         timer_box.empty()
@@ -240,33 +201,33 @@ with tab_challenge:
         st.session_state.phase = "question"
         st.rerun()
 
-    # 3. QUESTIONING PHASE (IMAGE CONCEALED)
+    # 3. QUESTION RECALL
     elif st.session_state.phase == "question":
         st.markdown("#### ❓ Recall Challenge")
-        st.caption(f"Mode: **{st.session_state.difficulty}** • The image is hidden. Answer based on what you observed.")
+        st.caption(f"Difficulty: **{st.session_state.difficulty}** • The image is hidden. Answer what you observed.")
 
         questions = st.session_state.analysis.get("questions", [])
         user_answers = {}
 
-        with st.form("answers_form"):
+        with st.form("assessment_form"):
             for i, q in enumerate(questions):
                 st.markdown(f"""
-                <div class="q-box">
-                    <span style="font-size: 0.75rem; color: #38bdf8; font-weight: 700; text-transform: uppercase;">{q.get('category', 'Visual Detail')}</span>
-                    <div style="font-weight: 600; font-size: 0.95rem; margin-top: 0.2rem; color: #f1f5f9;">Q{i+1}. {q.get('question')}</div>
+                <div style="background: rgba(30, 41, 59, 0.7); border-left: 4px solid #38bdf8; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+                    <div style="font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase;">{q.get('category', 'Visual Detail')}</div>
+                    <div style="font-size: 15px; font-weight: 600; color: #f8fafc; margin-top: 4px;">Q{i+1}. {q.get('question')}</div>
                 </div>
                 """, unsafe_allow_html=True)
-                user_answers[i] = st.text_input(f"Answer Q{i+1}", key=f"ans_field_{i}", placeholder="Type your answer here...").strip().lower()
-                st.write("")
+                user_answers[i] = st.text_input(f"Your answer for Q{i+1}", key=f"q_in_{i}").strip().lower()
 
-            if st.form_submit_button("Submit Assessment"):
+            st.write("")
+            if st.form_submit_button("Submit Answers"):
                 st.session_state.user_answers = user_answers
                 st.session_state.phase = "result"
                 st.rerun()
 
-    # 4. RESULT PHASE & DATABASE COMMIT
+    # 4. RESULTS & DATABASE LOGGING
     elif st.session_state.phase == "result":
-        st.markdown("#### 🎯 Evaluation Report")
+        st.markdown("#### 🎯 Challenge Evaluation")
         questions = st.session_state.analysis.get("questions", [])
         feat = st.session_state.analysis.get("features", {})
         user_answers = st.session_state.user_answers
@@ -281,13 +242,13 @@ with tab_challenge:
 
             if is_match:
                 score += 1
-                st.success(f"**Q{i+1} Passed**: {q.get('question')}\n\n*Your Answer:* `{user_val}`")
+                st.success(f"**Q{i+1} Correct**: {q.get('question')}\n\n*Your Answer:* `{user_val}`")
             else:
                 st.error(f"**Q{i+1} Missed**: {q.get('question')}\n\n*Your Answer:* `{user_val or 'Empty'}` • *Expected:* `{correct_val}`")
 
         accuracy_pct = round((score / total) * 100, 1) if total > 0 else 0
 
-        # Save to SQLite database (guarded so it only saves once per challenge)
+        # Commit to SQLite Database
         if not st.session_state.saved_this_round:
             save_result(
                 difficulty=st.session_state.difficulty,
@@ -301,44 +262,40 @@ with tab_challenge:
             st.session_state.saved_this_round = True
 
         st.markdown(f"""
-        <div class="glass-card" style="text-align: center; border-color: rgba(99, 102, 241, 0.4);">
-            <div style="font-size: 0.85rem; color: #94a3b8; font-weight: 600;">COGNITIVE ACCURACY SCORE</div>
-            <div style="font-size: 3rem; font-weight: 800; color: #38bdf8;">{accuracy_pct}%</div>
-            <div style="font-size: 0.9rem; color: #cbd5e1;">Logged {score} out of {total} correct answers to database.</div>
+        <div style="background: rgba(15, 23, 42, 0.85); border: 1.5px solid rgba(56, 189, 248, 0.4); border-radius: 18px; padding: 20px; text-align: center; margin: 15px 0;">
+            <div style="font-size: 12px; font-weight: 700; color: #94a3b8; letter-spacing: 1px;">ACCURACY SCORE</div>
+            <div style="font-size: 48px; font-weight: 800; color: #38bdf8; font-family: monospace;">{accuracy_pct}%</div>
+            <div style="font-size: 14px; color: #cbd5e1;">Logged {score} of {total} correct answers to database.</div>
         </div>
         """, unsafe_allow_html=True)
 
-        with st.expander("🔍 Inspect Scene Ground Truth"):
+        with st.expander("🔍 View Scene Ground Truth"):
             st.image(st.session_state.image_path, use_container_width=True)
 
-        if st.button("🔄 Launch New Challenge"):
+        if st.button("🔄 Start New Challenge"):
             st.session_state.phase = "upload"
             st.session_state.analysis = None
             st.session_state.image_path = None
             st.rerun()
 
-# =================================================================
-# TAB 2: ANALYTICS & DATABASE HISTORY
-# =================================================================
+# ================= TAB 2: ANALYTICS =================
 with tab_analytics:
-    st.markdown("#### 📈 Cognitive Progress & Database Records")
-    
+    st.markdown("#### 📈 Cognitive Progression Ledger")
+
     df_history = get_history()
 
     if df_history.empty:
-        st.info("No assessments logged yet. Complete your first challenge to see your cognitive progression curves!")
+        st.info("No assessments logged yet. Complete a challenge to view your cognitive performance graphs!")
     else:
-        # Top High-Level Metrics
         total_tests = len(df_history)
-        avg_accuracy = round(df_history["accuracy"].mean(), 1)
-        best_accuracy = round(df_history["accuracy"].max(), 1)
+        avg_acc = round(df_history["accuracy"].mean(), 1)
+        best_acc = round(df_history["accuracy"].max(), 1)
 
         m1, m2, m3 = st.columns(3)
-        m1.metric("Tests Taken", total_tests)
-        m2.metric("Avg Accuracy", f"{avg_accuracy}%")
-        m3.metric("Peak Score", f"{best_accuracy}%")
+        m1.metric("Tests", total_tests)
+        m2.metric("Avg Score", f"{avg_acc}%")
+        m3.metric("Peak", f"{best_acc}%")
 
-        # Interactive Performance Trend Chart (Plotly)
         st.markdown("##### Accuracy Progression Over Time")
         chart_df = df_history.sort_values(by="id")
         fig = px.line(
@@ -348,26 +305,24 @@ with tab_analytics:
             markers=True,
             color="difficulty",
             color_discrete_map={"Easy": "#34d399", "Medium": "#38bdf8", "Hard": "#f43f5e"},
-            labels={"id": "Test Run #", "accuracy": "Accuracy (%)"}
+            labels={"id": "Run #", "accuracy": "Accuracy (%)"}
         )
         fig.update_layout(
             template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=10, r=10, t=20, b=20),
-            height=280
+            margin=dict(l=10, r=10, t=15, b=15),
+            height=260
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # Database Records Table
-        st.markdown("##### Assessment History Log")
+        st.markdown("##### Assessment History")
         display_df = df_history[["id", "timestamp", "difficulty", "score", "total", "accuracy", "dominant_color"]]
-        display_df.columns = ["#", "Date / Time", "Difficulty", "Correct", "Total", "Accuracy %", "Dominant Tone"]
+        display_df.columns = ["#", "Date/Time", "Tier", "Correct", "Total", "Accuracy %", "Tone"]
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-        # Clear Database Option
-        with st.expander("⚙️ Database Management"):
-            if st.button("🗑️ Reset All Assessment Records"):
+        with st.expander("⚙️ Database Controls"):
+            if st.button("🗑️ Reset All Records"):
                 clear_history()
-                st.success("Database cleared!")
+                st.success("Database records cleared!")
                 st.rerun()
