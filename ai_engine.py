@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 from PIL import Image
+import streamlit as st
 
 # Try importing pytesseract safely (won't crash if Tesseract is missing)
 try:
@@ -204,10 +205,13 @@ def analyze_image(image_path, use_gemini=False, difficulty="Medium"):
     """Main analyzer called by app.py."""
     features = extract_features(image_path)
     
+    # Check both environment variables and Streamlit secrets
+    gemini_key = os.getenv("GEMINI_API_KEY") or (st.secrets.get("GEMINI_API_KEY") if hasattr(st, "secrets") else None)
+
     # If Gemini Vision is requested and available
-    if use_gemini and HAS_GEMINI and os.getenv("GEMINI_API_KEY"):
+    if use_gemini and HAS_GEMINI and gemini_key:
         try:
-            genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+            genai.configure(api_key=gemini_key)
             model = genai.GenerativeModel("gemini-1.5-flash")
             pil_img = Image.open(image_path)
             prompt = f"""
