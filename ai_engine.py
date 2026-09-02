@@ -1,107 +1,238 @@
-import os, json, re, sqlite3, time
-from collections import defaultdict
-from pathlib import Path
-import pandas as pd
+import os
+import cv2
+import numpy as np
 from PIL import Image
-import pytesseract
 
-DB="data/observa.db"
-Path("data").mkdir(exist_ok=True)
+# Try importing pytesseract safely (won't crash if Tesseract is missing)
+try:
+    import pytesseract
+    HAS_TESSERACT = True
+except ImportError:
+    HAS_TESSERACT = False
 
-def normalize(x):
-    return re.sub(r"[^a-z0-9 ]","",str(x).lower()).strip()
+# Try importing Google Gemini (optional)
+try:
+    import google.generativeai as genai
+    HAS_GEMINI = True
+except ImportError:
+    HAS_GEMINI = False
 
-def init_db():
-    con=sqlite3.connect(DB)
-    con.execute("""CREATE TABLE IF NOT EXISTS rounds (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT, difficulty TEXT,
-        score REAL, accuracy REAL, correct INTEGER, total INTEGER, response_time REAL,
-        category_scores TEXT, insight TEXT)""")
-    con.commit(); con.close()
 
-init_db()
+def get_dominant_color_name(img_bgr):
+    """Identifies the prominent color in plain English."""
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+    
+    mean_s = np.mean(s)
+    mean_v = np.mean(v)
+    
+    if mean_v < 40:
+        return "black"
+    if mean_s < 30 and mean_v > 200:
+        return "white"
+    if mean_s < 35:
+        return "gray"
+        
+    mean_h = np.mean(h)
+    if mean_h < 10 or mean_h > 170:
+        return "red"
+    elif mean_h < 25:
+        return "orange"
+    elif mean_h < 35:
+        return "yellow"
+    elif mean_h < 85:
+        return "green"
+    elif mean_h < 130:
+        return "blue"
+    elif mean_h < 160:
+        return "purple"
+    return "colored"
 
-def analyze_image(image_path, use_gemini=False):
-    # Optional real multimodal AI path.
-    if use_gemini and os.getenv("GEMINI_API_KEY"):
+
+def extract_features(image_path):
+    """Extracts rich visual features using OpenCV and PIL."""
+    features = {
+        "width": 0, "height": 0, "aspect_ratio": "landscape",
+        "brightness": "moderate", "dominant_color": "neutral",
+        "brightest_quadrant": "center", "object_count": 0,
+        "text": "", "has_text": False
+    }
+
+    # 1. Dimensions
+    try:
+        with Image.open(image_path) as pil_img:
+            w, h = pil_img.size
+            features["width"] = w
+            features["height"] = h
+            features["aspect_ratio"] = "landscape" if w > h else ("portrait" if h > w else "square")
+    except Exception:
+        pass
+
+    # 2. OpenCV Vision Extraction
+    img = cv2.imread(image_path)
+    if img is not None:
+        # Dominant color
+        features["dominant_color"] = get_dominant_color_name(img)
+
+        # Brightness
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        mean_b = np.mean(gray)
+        if mean_b < 80:
+            features["brightness"] = "dark"
+        elif mean_b > 175:
+            features["brightness"] = "bright"
+        else:
+            features["brightness"] = "moderate"
+
+        # Quadrant Activity & Lighting
+        gh, gw = gray.shape
+        quads = {
+            "top-left": np.mean(gray[:gh//2, :gw//2]),
+            "top-right": np.mean(gray[:gh//2, gw//2:]),
+            "bottom-left": np.mean(gray[gh//2:, :gw//2]),
+            "bottom-right": np.mean(gray[gh//2:, gw//2:])
+        }
+        features["brightest_quadrant"] = max(quads, key=quads.get)
+
+        # Approximate Object / Salient Region Count
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        edges = cv2.Canny(blur, 50, 150)
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        large_contours = [c for c in contours if cv2.contourArea(c) > 400]
+        features["object_count"] = min(len(large_contours), 12)
+
+    # 3. Safe OCR Text Extraction (wrapped in try/except)
+    if HAS_TESSERACT:
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-            model=genai.GenerativeModel("gemini-2.5-flash")
-            img=Image.open(image_path)
-            prompt="""Analyse this image for an observation-memory test.
-Return ONLY valid JSON with:
-objects: [{name, color, count}],
-text: [visible text],
-relationships: [short facts like 'cat is left of table'].
-Be conservative and do not invent details."""
-            response=model.generate_content([prompt,img])
-            return json.loads(response.text.strip().replace("```json","").replace("```",""))
+            extracted = pytesseract.image_to_string(Image.open(image_path)).strip()
+            clean_text = " ".join(extracted.split())
+            if len(clean_text) > 3:
+                features["text"] = clean_text
+                features["has_text"] = True
         except Exception:
-            pass
-    # Fully offline baseline: OCR + metadata. Reliable questions are built from OCR.
-    img=Image.open(image_path).convert("RGB")
-    w,h=img.size
-    text=pytesseract.image_to_string(img).strip()
-    return {"objects":[], "text":[x.strip() for x in text.splitlines() if x.strip()],
-            "relationships":[], "image_size":{"width":w,"height":h}}
+            features["text"] = ""
+            features["has_text"] = False
 
-def generate_questions(analysis, difficulty):
-    qs=[]
-    # Text questions
-    for t in analysis.get("text",[])[:4]:
-        qs.append({"category":"Text Recognition","question":f"What exact text did you notice: '{t}'?","answer":t,"difficulty":difficulty})
-    # Vision-model questions
-    for obj in analysis.get("objects",[]):
-        name=obj.get("name","object"); count=obj.get("count")
-        color=obj.get("color")
-        if count not in [None,"unknown"]:
-            qs.append({"category":"Counting","question":f"How many {name}s were visible?","answer":str(count),"difficulty":difficulty})
-        if color and color!="unknown":
-            qs.append({"category":"Color Recognition","question":f"What color was the {name}?","answer":str(color),"difficulty":difficulty})
-        qs.append({"category":"Object Recognition","question":f"Was a {name} visible in the image?","answer":"yes","difficulty":difficulty})
-    for rel in analysis.get("relationships",[])[:3]:
-        qs.append({"category":"Spatial Awareness","question":f"Recall this visual relationship: {rel} (true/false)","answer":"true","difficulty":difficulty})
-    # Fallback so the module always demonstrates the complete flow
-    if len(qs)<3:
-        w=analysis.get("image_size",{}).get("width")
-        h=analysis.get("image_size",{}).get("height")
-        if w and h:
-            qs += [
-                {"category":"Visual Detail","question":"Was the image wider than it was tall? (yes/no)","answer":"yes" if w>h else "no","difficulty":difficulty},
-                {"category":"Visual Detail","question":"Was the image taller than it was wide? (yes/no)","answer":"yes" if h>w else "no","difficulty":difficulty},
-            ]
-    return qs[: {"Easy":3,"Medium":5,"Hard":7}[difficulty]]
+    return features
 
-def evaluate_answers(questions, answers, response_time):
-    details=[]; categories=defaultdict(lambda:[0,0])
-    for i,q in enumerate(questions):
-        expected=normalize(q["answer"]); actual=normalize(answers.get(str(i),""))
-        correct=actual==expected or (expected in actual and len(expected)>2)
-        categories[q["category"]][1]+=1
-        categories[q["category"]][0]+=int(correct)
-        details.append({"question":q["question"],"expected":q["answer"],"actual":answers.get(str(i),""),"correct":correct})
-    total=len(questions); correct=sum(d["correct"] for d in details)
-    category_scores={k:round(v[0]/v[1]*100,1) for k,v in categories.items()}
-    accuracy=round(correct/total*100,1) if total else 0
-    weak=min(category_scores,key=category_scores.get) if category_scores else "overall observation"
-    insight=f"Your strongest available skill data is being tracked. Focus on {weak}: it had the lowest accuracy in this round."
-    return {"score":accuracy,"accuracy":accuracy,"correct":correct,"total":total,
-            "response_time":round(response_time,1),"category_scores":category_scores,
-            "details":details,"insight":insight}
 
-def adapt_difficulty(result,current):
-    order=["Easy","Medium","Hard"]; i=order.index(current)
-    if result["accuracy"]>=80 and i<2: return order[i+1]
-    if result["accuracy"]<50 and i>0: return order[i-1]
-    return current
+def generate_local_questions(features, difficulty="Medium"):
+    """Generates varied questions according to difficulty level."""
+    questions = []
+    diff = difficulty.capitalize()
 
-def save_round(r):
-    con=sqlite3.connect(DB)
-    con.execute("""INSERT INTO rounds(created_at,difficulty,score,accuracy,correct,total,response_time,category_scores,insight)
-    VALUES(datetime('now'),?,?,?,?,?,?,?,?)""",
-    (r["difficulty"],r["score"],r["accuracy"],r["correct"],r["total"],r["response_time"],json.dumps(r["category_scores"]),r["insight"]))
-    con.commit(); con.close()
+    dom_color = features["dominant_color"]
+    brightness = features["brightness"]
+    obj_count = features["object_count"]
+    has_text = features["has_text"]
+    aspect = features["aspect_ratio"]
+    quad = features["brightest_quadrant"]
 
-def get_history():
-    con=sqlite3.connect(DB); df=pd.read_sql_query("SELECT * FROM rounds",con); con.close(); return df
+    # ================= EASY LEVEL =================
+    if diff == "Easy":
+        questions.append({
+            "question": f"Was the overall lighting of the scene primarily bright? (yes/no)",
+            "category": "Lighting & Mood",
+            "answer": "yes" if brightness == "bright" else "no"
+        })
+        questions.append({
+            "question": f"Was {dom_color} one of the noticeable dominant colors in the image? (yes/no)",
+            "category": "Color Recognition",
+            "answer": "yes"
+        })
+        questions.append({
+            "question": f"Did the image contain any readable words, signs, or text? (yes/no)",
+            "category": "Visual Details",
+            "answer": "yes" if has_text else "no"
+        })
+
+    # ================= MEDIUM LEVEL =================
+    elif diff == "Medium":
+        questions.append({
+            "question": f"Was the image formatted in {aspect} orientation? (yes/no)",
+            "category": "Composition",
+            "answer": "yes"
+        })
+        threshold_count = max(2, obj_count - 1)
+        questions.append({
+            "question": f"Did the scene contain at least {threshold_count} distinct objects or visual elements? (yes/no)",
+            "category": "Visual Counting",
+            "answer": "yes" if obj_count >= threshold_count else "no"
+        })
+        questions.append({
+            "question": f"Was the {quad} quadrant noticeably brighter or more lit than the rest? (yes/no)",
+            "category": "Spatial Lighting",
+            "answer": "yes"
+        })
+
+    # ================= HARD LEVEL =================
+    else:  # Hard
+        if has_text:
+            sample_word = features["text"].split()[0]
+            questions.append({
+                "question": f"Did the text in the image contain the word or sequence '{sample_word}'? (yes/no)",
+                "category": "Exact Recall",
+                "answer": "yes"
+            })
+        else:
+            questions.append({
+                "question": "Were there any clear logos, barcodes, or text captions visible? (yes/no)",
+                "category": "Fine Inspection",
+                "answer": "no"
+            })
+
+        questions.append({
+            "question": f"In which specific quadrant was the brightest area located: {quad} or center? ({quad}/center)",
+            "category": "Spatial Detail",
+            "answer": quad
+        })
+        questions.append({
+            "question": f"Was the scene lighting classified as '{brightness}' rather than completely balanced? (yes/no)",
+            "category": "Cognitive Tone",
+            "answer": "yes" if brightness in ["dark", "bright"] else "no"
+        })
+        questions.append({
+            "question": f"Were more than {obj_count + 2} primary contours detected in the composition? (yes/no)",
+            "category": "Structural Density",
+            "answer": "no"
+        })
+
+    return questions
+
+
+def analyze_image(image_path, use_gemini=False, difficulty="Medium"):
+    """Main analyzer called by app.py."""
+    features = extract_features(image_path)
+    
+    # If Gemini Vision is requested and available
+    if use_gemini and HAS_GEMINI and os.getenv("GEMINI_API_KEY"):
+        try:
+            genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            pil_img = Image.open(image_path)
+            prompt = f"""
+            Analyze this image for a cognitive memory observation challenge.
+            Difficulty: {difficulty}.
+            Generate 3 short, specific questions testing what the viewer noticed.
+            Format output strictly as:
+            Q1: [question] | Category: [category] | Answer: [short answer]
+            Q2: [question] | Category: [category] | Answer: [short answer]
+            Q3: [question] | Category: [category] | Answer: [short answer]
+            """
+            resp = model.generate_content([prompt, pil_img])
+            gemini_questions = []
+            for line in resp.text.split("\n"):
+                if "|" in line and "Q" in line:
+                    parts = line.split("|")
+                    q_text = parts[0].split(":", 1)[-1].strip()
+                    cat = parts[1].split(":", 1)[-1].strip()
+                    ans = parts[2].split(":", 1)[-1].strip()
+                    gemini_questions.append({"question": q_text, "category": cat, "answer": ans})
+            if gemini_questions:
+                return {"questions": gemini_questions, "features": features}
+        except Exception as e:
+            print(f"Gemini fallback to local CV: {e}")
+
+    # Default: Robust computer vision heuristics
+    questions = generate_local_questions(features, difficulty=difficulty)
+    return {"questions": questions, "features": features}
