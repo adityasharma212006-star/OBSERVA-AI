@@ -1,106 +1,198 @@
-import streamlit as st
+import os
 import time
-from pathlib import Path
-import random
-import sqlite3
-import pandas as pd
-import plotly.express as px
-from ai_engine import analyze_image, generate_questions, evaluate_answers, adapt_difficulty, save_round, get_history
+import tempfile
+import streamlit as st
+from PIL import Image
+from ai_engine import analyze_image
 
-st.set_page_config(page_title="OBSERVA AI", page_icon="🧠", layout="wide")
+# ----------------- PAGE & MOBILE HUD CONFIG -----------------
+st.set_page_config(
+    page_title="OBSERVA AI",
+    page_icon="🧠",
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
 
-def init():
-    defaults = {"stage":"home","image":None,"analysis":None,"questions":None,
-                "answers":{},"difficulty":"Medium","round_start":None}
-    for k,v in defaults.items():
-        if k not in st.session_state: st.session_state[k]=v
-init()
+# Custom CSS for Mobile App View & Clean Dark Theme
+st.markdown("""
+<style>
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: 540px !important;
+        margin: auto;
+    }
+    .stButton>button {
+        width: 100%;
+        border-radius: 12px;
+        height: 3.2rem;
+        font-weight: 600;
+        font-size: 1rem;
+        background-color: #ef4444;
+        color: white;
+        border: none;
+    }
+    .stButton>button:hover {
+        background-color: #dc2626;
+        color: white;
+    }
+    .timer-box {
+        font-size: 2.2rem;
+        font-weight: 800;
+        text-align: center;
+        color: #ef4444;
+        padding: 0.5rem;
+        border-radius: 12px;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.25);
+        margin-bottom: 1rem;
+    }
+    img {
+        border-radius: 14px;
+        max-width: 100% !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-st.title("🧠 OBSERVA AI")
+# ----------------- SESSION STATE -----------------
+if "phase" not in st.session_state:
+    st.session_state.phase = "upload"  # upload -> observe -> question -> result
+if "analysis" not in st.session_state:
+    st.session_state.analysis = None
+if "image_path" not in st.session_state:
+    st.session_state.image_path = None
+
+# ----------------- HEADER -----------------
+st.markdown("## 🧠 OBSERVA AI")
 st.caption("AI-Powered Visual Observation & Cognitive Assessment System")
 
-tab1, tab2 = st.tabs(["🎯 Challenge", "📊 Analytics"])
+tab_challenge, tab_analytics = st.tabs(["🎯 Challenge", "📊 Analytics"])
 
-with tab1:
-    if st.session_state.stage == "home":
-        st.info("Upload a scene image. OBSERVA will analyse it, generate questions, hide the image after a timed observation period, evaluate your answers, and adapt the next difficulty.")
-        uploaded = st.file_uploader("Upload challenge image", type=["jpg","jpeg","png"])
-        c1,c2,c3 = st.columns(3)
-        difficulty = c1.selectbox("Starting difficulty", ["Easy","Medium","Hard"], index=["Easy","Medium","Hard"].index(st.session_state.difficulty))
-        observe_seconds = c2.select_slider("Observation time", options=[3,5,10,15], value=10)
-        ai_mode = c3.checkbox("Use Gemini Vision (optional)", value=False)
-        if uploaded and st.button("Prepare AI Challenge", type="primary"):
-            path = Path("data/uploads"); path.mkdir(parents=True, exist_ok=True)
-            image_path = path / f"{int(time.time())}_{uploaded.name}"
-            image_path.write_bytes(uploaded.getvalue())
-            with st.spinner("Analysing image and creating questions..."):
-                analysis = analyze_image(str(image_path), use_gemini=ai_mode)
-                questions = generate_questions(analysis, difficulty)
-            if not questions:
-                st.error("Could not generate enough reliable questions. Try another image.")
-            else:
-                st.session_state.update({"image":str(image_path),"analysis":analysis,"questions":questions,
-                                         "difficulty":difficulty,"stage":"observe","observe_seconds":observe_seconds})
+# ================= TAB 1: CHALLENGE =================
+with tab_challenge:
+
+    # 1. SETUP / UPLOAD PHASE
+    if st.session_state.phase == "upload":
+        st.info("Upload or photograph a scene. OBSERVA will analyze it, give you a timed window to observe, hide the image, and test your recall.")
+
+        # Mobile input mode selector
+        input_type = st.radio("Image Source:", ["📁 Upload Image", "📸 Mobile Camera"], horizontal=True)
+
+        uploaded_file = None
+        if input_type == "📁 Upload Image":
+            uploaded_file = st.file_uploader("Upload challenge image", type=["jpg", "jpeg", "png"])
+        else:
+            uploaded_file = st.camera_input("Take a photo")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            difficulty = st.selectbox("Difficulty", ["Easy", "Medium", "Hard"], index=1)
+        with col2:
+            obs_time = st.slider("Observation time (sec)", 5, 30, 10)
+
+        use_gemini = st.checkbox("Use Gemini Vision (optional)", value=False)
+
+        if uploaded_file is not None:
+            if st.button("🚀 Start Observation Challenge"):
+                # Save uploaded image to temp file
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                    tmp.write(uploaded_file.getvalue())
+                    st.session_state.image_path = tmp.name
+
+                with st.spinner("AI is analyzing scene features..."):
+                    st.session_state.analysis = analyze_image(
+                        st.session_state.image_path,
+                        use_gemini=use_gemini,
+                        difficulty=difficulty
+                    )
+                st.session_state.obs_time = obs_time
+                st.session_state.difficulty = difficulty
+                st.session_state.phase = "observe"
                 st.rerun()
 
-    elif st.session_state.stage == "observe":
-        st.subheader("Observe carefully")
-        st.image(st.session_state.image, use_container_width=True)
-        st.warning(f"You have {st.session_state.observe_seconds} seconds. The image will disappear when you start.")
-        if st.button("Start Observation Timer", type="primary"):
-            placeholder=st.empty()
-            for remaining in range(st.session_state.observe_seconds, 0, -1):
-                placeholder.metric("Time remaining", f"{remaining}s")
-                time.sleep(1)
-            placeholder.empty()
-            st.session_state.stage="questions"
-            st.session_state.round_start=time.time()
+    # 2. OBSERVATION PHASE (COUNTDOWN)
+    elif st.session_state.phase == "observe":
+        st.markdown(f"### 👁️ Observe closely! ({st.session_state.difficulty} Mode)")
+        countdown_placeholder = st.empty()
+        img_placeholder = st.empty()
+
+        img_placeholder.image(st.session_state.image_path, use_container_width=True)
+
+        for remaining in range(st.session_state.obs_time, 0, -1):
+            countdown_placeholder.markdown(f'<div class="timer-box">⏱️ {remaining}s</div>', unsafe_allow_html=True)
+            time.sleep(1)
+
+        countdown_placeholder.empty()
+        img_placeholder.empty()
+        st.session_state.phase = "question"
+        st.rerun()
+
+    # 3. QUESTIONING PHASE (IMAGE HIDDEN)
+    elif st.session_state.phase == "question":
+        st.markdown("### ❓ Answer without looking at the image")
+        st.caption(f"Difficulty: **{st.session_state.difficulty}** • Each answer is evaluated against detected visual features.")
+
+        questions = st.session_state.analysis["questions"]
+        user_answers = {}
+
+        with st.form("q_form"):
+            for idx, q in enumerate(questions):
+                st.markdown(f"**Q{idx+1}. {q['question']}**")
+                st.caption(f"*Category: {q['category']}*")
+                user_answers[idx] = st.text_input(f"Your answer for Q{idx+1}", key=f"ans_{idx}").strip().lower()
+                st.write("")
+
+            submitted = st.form_submit_button("Submit Answers")
+            if submitted:
+                st.session_state.user_answers = user_answers
+                st.session_state.phase = "result"
+                st.rerun()
+
+    # 4. RESULTS & SCORE
+    elif st.session_state.phase == "result":
+        st.markdown("### 🏆 Challenge Results")
+        questions = st.session_state.analysis["questions"]
+        user_answers = st.session_state.user_answers
+
+        score = 0
+        total = len(questions)
+
+        for idx, q in enumerate(questions):
+            user_ans = user_answers.get(idx, "")
+            correct_ans = str(q.get("answer", "")).lower().strip()
+            
+            is_correct = (user_ans == correct_ans) or (correct_ans in user_ans and len(user_ans) > 0)
+            if is_correct:
+                score += 1
+                st.success(f"**Q{idx+1}: Correct!** ({q['question']})\n- Your Answer: `{user_ans}`")
+            else:
+                st.error(f"**Q{idx+1}: Incorrect** ({q['question']})\n- Your Answer: `{user_ans or 'None'}`\n- Correct Answer: `{correct_ans}`")
+
+        percent = int((score / total) * 100)
+        st.metric(label="Visual Accuracy Score", value=f"{percent}%", delta=f"{score}/{total} correct")
+
+        # Reveal Original Image
+        with st.expander("🔍 Review Original Image"):
+            st.image(st.session_state.image_path, use_container_width=True)
+
+        if st.button("🔄 Try Another Image"):
+            st.session_state.phase = "upload"
+            st.session_state.analysis = None
+            st.session_state.image_path = None
             st.rerun()
 
-    elif st.session_state.stage == "questions":
-        st.subheader("Answer without looking at the image")
-        st.caption("Each answer is evaluated against the visual information extracted during analysis.")
-        with st.form("answers"):
-            answers={}
-            for i,q in enumerate(st.session_state.questions):
-                st.markdown(f"**Q{i+1}. {q['question']}**  \n*Category: {q['category']}*")
-                answers[str(i)] = st.text_input("Your answer", key=f"a{i}", label_visibility="collapsed")
-            submitted=st.form_submit_button("Submit Answers", type="primary")
-        if submitted:
-            response_time=time.time()-st.session_state.round_start
-            result=evaluate_answers(st.session_state.questions, answers, response_time)
-            result["difficulty"]=st.session_state.difficulty
-            result["next_difficulty"]=adapt_difficulty(result, st.session_state.difficulty)
-            save_round(result)
-            st.session_state.result=result
-            st.session_state.stage="result"
-            st.rerun()
-
-    elif st.session_state.stage == "result":
-        r=st.session_state.result
-        st.success(f"Overall Observation Score: {r['score']}%")
-        a,b,c=st.columns(3)
-        a.metric("Correct", f"{r['correct']}/{r['total']}")
-        b.metric("Accuracy", f"{r['accuracy']}%")
-        c.metric("Response time", f"{r['response_time']} sec")
-        st.subheader("Skill-wise profile")
-        df=pd.DataFrame([{"Category":k,"Accuracy":v} for k,v in r["category_scores"].items()])
-        if not df.empty: st.bar_chart(df.set_index("Category"))
-        st.info(r["insight"])
-        st.markdown(f"### Next recommended difficulty: **{r['next_difficulty']}**")
-        st.session_state.difficulty=r["next_difficulty"]
-        if st.button("Start Next Challenge", type="primary"):
-            st.session_state.stage="home"
-            st.rerun()
-
-with tab2:
-    history=get_history()
-    if history.empty:
-        st.info("Complete a challenge to unlock analytics.")
+# ================= TAB 2: ANALYTICS =================
+with tab_analytics:
+    st.markdown("### 📊 Cognitive Metrics")
+    st.write("Visual processing telemetry:")
+    if st.session_state.analysis:
+        feat = st.session_state.analysis.get("features", {})
+        col1, col2 = st.columns(2)
+        col1.metric("Dominant Tone", str(feat.get("dominant_color", "N/A")).capitalize())
+        col2.metric("Brightness", str(feat.get("brightness", "N/A")).capitalize())
+        col1.metric("Aspect Ratio", str(feat.get("aspect_ratio", "N/A")).capitalize())
+        col2.metric("Salient Regions", feat.get("object_count", 0))
     else:
-        st.metric("Rounds completed", len(history))
-        fig=px.line(history, x="created_at", y="score", markers=True, title="Observation Score Progress")
-        st.plotly_chart(fig, use_container_width=True)
-        cat=history.groupby("difficulty", as_index=False)["score"].mean()
-        st.plotly_chart(px.bar(cat,x="difficulty",y="score",title="Average Score by Difficulty"), use_container_width=True)
-        st.dataframe(history.sort_values("created_at",ascending=False), use_container_width=True)
+        st.info("Complete an observation challenge to view your analytics breakdown.")
